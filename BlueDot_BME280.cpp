@@ -43,8 +43,14 @@ uint8_t BlueDot_BME280::init()
 	case DeviceParameter::CommunicationMode::I2C:
 	default:
 	{
-		// Wire.begin();											//Default value for Arduino Boards
-		Wire.begin(4, 15); //Use this for NodeMCU board; SDA = GPIO0 = D3; SCL = GPIO2 = D4
+		if (parameter.I2C_SDA > -1 && parameter.I2C_SCL > -1)
+		{
+			Wire.begin(parameter.I2C_SDA, parameter.I2C_SCL);
+		}
+		else
+		{
+			Wire.begin(); //Default value for Arduino Boards
+		}
 		break;
 	}
 	}
@@ -131,17 +137,40 @@ void BlueDot_BME280::writeCTRLMeas()
 {
 	writeByte(BME280_CTRL_HUM, static_cast<uint8_t>(parameter.humidOversampling));
 
+	setSensorMode(parameter.sensorMode);
+}
+
+void BlueDot_BME280::setSensorMode(DeviceParameter::SensorMode mode)
+{
+	parameter.sensorMode = mode;
 	byte value = (static_cast<uint8_t>(parameter.tempOversampling) << 5);
 	value |= (static_cast<uint8_t>(parameter.pressOversampling) << 2);
 	value |= static_cast<uint8_t>(parameter.sensorMode);
 	writeByte(BME280_CTRL_MEAS, value);
+	// ForcedMode falls back to sleep automatically
+	if (parameter.sensorMode == DeviceParameter::SensorMode::Forced)
+	{
+		parameter.sensorMode = DeviceParameter::SensorMode::Sleep;
+	}
 }
+
+void BlueDot_BME280::forceRead()
+{
+	if (parameter.sensorMode != DeviceParameter::SensorMode::Sleep)
+	{
+		setSensorMode(DeviceParameter::SensorMode::Sleep);
+	}
+	setSensorMode(DeviceParameter::SensorMode::Forced);
+	const auto forcedReadDelay = parameter.forcedReadDelay();
+	delay(forcedReadDelay);
+}
+
 //##########################################################################
 //DATA READOUT FUNCTIONS
 //##########################################################################
 float BlueDot_BME280::readPressure(void)
 {
-	if (parameter.pressOversampling != DeviceParameter::Factor::Off) //disabling the pressure measurement function
+	if (parameter.pressOversampling != DeviceParameter::Filter::Off) //disabling the pressure measurement function
 	{
 		readTempC();
 
@@ -172,7 +201,7 @@ float BlueDot_BME280::readPressure(void)
 }
 
 //##########################################################################
-float BlueDot_BME280::convertTempKelvin(void)
+float BlueDot_BME280::convertTempKelvin()
 {
 	//Temperature in Kelvin is needed for the conversion of pressure to altitude
 	//Both tempOutsideCelsius and tempOutsideFahrenheit are set to 999 as default (see .h file)
@@ -229,7 +258,7 @@ float BlueDot_BME280::readAltitudeMeter()
 //##########################################################################
 float BlueDot_BME280::readHumidity()
 {
-	if (parameter.humidOversampling != DeviceParameter::Factor::Off) //disabling the humitidy measurement function
+	if (parameter.humidOversampling != DeviceParameter::Filter::Off) //disabling the humitidy measurement function
 	{
 		int32_t adc_H = (uint32_t)readByte(BME280_HUMIDITY_MSB) << 8;
 		adc_H |= (uint32_t)readByte(BME280_HUMIDITY_LSB);
@@ -255,7 +284,7 @@ float BlueDot_BME280::readHumidity()
 //##########################################################################
 float BlueDot_BME280::readTempC(void)
 {
-	if (parameter.tempOversampling != DeviceParameter::Factor::Off) //disabling the temperature measurement function
+	if (parameter.tempOversampling != DeviceParameter::Filter::Off) //disabling the temperature measurement function
 	{
 		int32_t adc_T;
 		adc_T = (uint32_t)readByte(BME280_TEMPERATURE_MSB) << 12;
@@ -277,7 +306,7 @@ float BlueDot_BME280::readTempC(void)
 //##########################################################################
 float BlueDot_BME280::readTempF()
 {
-	if (parameter.tempOversampling != DeviceParameter::Factor::Off) //disabling the temperature measurement function
+	if (parameter.tempOversampling != DeviceParameter::Filter::Off) //disabling the temperature measurement function
 	{
 		const auto T_Celcius = readTempC();
 		return (T_Celcius * 1.8) + 32;

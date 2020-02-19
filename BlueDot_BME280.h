@@ -130,6 +130,11 @@ struct DeviceParameter
 	int8_t SPI_mosi;
 	int8_t SPI_miso;
 	uint8_t I2CAddress = 0x76;
+	// NodeMCU board; SDA = GPIO0 = D3; SCL = GPIO2 = D4
+	// MakerHawk ESP32 SDA 4, SCL 15
+	int8_t I2C_SDA = -1;
+	int8_t I2C_SCL = -1;
+
 	SensorMode sensorMode = SensorMode::Normal; //normal mode
 	IIRFilter IIRfilter = IIRFilter::F16;
 	Filter tempOversampling = Filter::F16;
@@ -140,12 +145,12 @@ struct DeviceParameter
 	int16_t tempOutsideFahrenheit = 999;
 
 	/// Compute maximum delay (ms) after a forced read
-	uint32_t forcedReadDelay(const struct bme280_settings *settings)
+	uint32_t forcedReadDelay()
 	{
 		const uint8_t filterFactor[] = {0, 1, 2, 4, 8, 16};
-		const uint8_t temp_osr = filterFactor[static_cast<uint8>(tempOversampling)];
-		const uint8_t pres_osr = filterFactor[static_cast<uint8>(pressOversampling)];
-		const uint8_t hum_osr = filterFactor[static_cast<uint8>(humidOversampling)];
+		const uint8_t temp_osr = filterFactor[static_cast<uint8_t>(tempOversampling)];
+		const uint8_t pres_osr = filterFactor[static_cast<uint8_t>(pressOversampling)];
+		const uint8_t hum_osr = filterFactor[static_cast<uint8_t>(humidOversampling)];
 		// section 9.1 datasheet bme280
 		const auto MeasOffset = 1250;
 		const auto MeasDuration = 2300;
@@ -166,6 +171,9 @@ public:
 	DeviceParameter parameter;
 
 	BlueDot_BME280();
+
+	void forceRead(); /// triggers a forced read and sleep so that a following read is valid
+
 	uint8_t init();
 	uint8_t checkID();
 	uint8_t readByte(byte reg);
@@ -185,4 +193,5 @@ public:
 private:
 	int32_t t_fine;
 	BME280_Coefficients bme280_coefficients;
+	void setSensorMode(DeviceParameter::SensorMode mode);
 };
